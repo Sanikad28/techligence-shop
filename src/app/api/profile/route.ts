@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma.config";
+import supabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function POST(req: Request) {
   try {
@@ -9,15 +9,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
     }
 
-    const profile = await prisma.profile.upsert({
-      where: { id },
-      update: { email, firstName, lastName, userId: id },
-      create: { id, email, firstName, lastName, userId: id }, // <-- add userId here
-    });
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .insert([
+        {
+          id,                // must match auth.users.id
+          email,
+          first_name: firstName,
+          last_name: lastName,
+        },
+      ])
+      .select()
+      .single();
 
-    return NextResponse.json(profile);
+    if (error) {
+      console.error("PROFILE INSERT ERROR:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, profile: data });
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

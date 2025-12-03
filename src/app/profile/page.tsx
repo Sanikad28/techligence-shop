@@ -56,11 +56,11 @@ export default function ProfilePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: data.user.id,
-              userId: data.user.id,
               email,
               firstName,
               lastName,
-            }),
+            })
+            ,
           });
 
           const result = await res.json();

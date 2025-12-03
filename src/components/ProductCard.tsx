@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Heart, ShoppingCart } from "lucide-react";
-import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
 
 interface ProductType {
-  id: number;
+  id: string;
   name: string;
-  price: string | number;
+  price: number | string;
   description?: string;
   shortDescription?: string;
-  image_url: string; // single main image
+  image_url: string;
 }
 
 export default function ProductCard({ product }: { product: ProductType }) {
@@ -23,69 +22,41 @@ export default function ProductCard({ product }: { product: ProductType }) {
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
 
-  const { addToCart } = useCart();
-
-  const [enquiryData, setEnquiryData] = useState({
-    name: "",
-    email: "",
-    message: "",
-  });
-
   const image = product.image_url || "/placeholder.png";
 
-  // ⭐ Wishlist Fetch
-  useEffect(() => {
-    async function fetchWishlist() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data } = await supabase
-          .from("wishlist")
-          .select("product_id")
-          .eq("user_id", user.id)
-          .eq("product_id", product.id)
-          .single();
-
-        if (data) setWishlisted(true);
-      } catch (err) {
-        console.error("Wishlist fetch error:", err);
-      }
-    }
-    fetchWishlist();
-  }, [product.id]);
-
-  // ⭐ Wishlist Toggle
-  const toggleWishlist = async (e: React.MouseEvent) => {
+  // ⭐ ADD TO CART
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      if (wishlisted) {
-        await supabase
-          .from("wishlist")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("product_id", product.id);
-        setWishlisted(false);
-      } else {
-        await supabase
-          .from("wishlist")
-          .insert({ user_id: user.id, product_id: product.id });
-        setWishlisted(true);
-      }
-    } catch (err) {
-      console.error("Wishlist toggle error:", err);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/profile"); // redirect to login/register page
+      return;
     }
-  };
 
-  // ⭐ Enquiry Submit
-  const handleEnquirySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Enquiry:", enquiryData);
-    setShowEnquiry(false);
+    if (!isAdded) {
+      // Send to our API (this handles carts + cart_items correctly)
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          productId: product.id,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        console.error("ADD TO CART ERROR:", result);
+        alert("Failed to add to cart");
+        return;
+      }
+
+      setIsAdded(true);
+    } else {
+      router.push("/cart");
+    }
   };
 
   return (
@@ -123,42 +94,11 @@ export default function ProductCard({ product }: { product: ProductType }) {
 
           {/* ADD TO CART */}
           <button
-            onClick={async (e) => {
-              e.stopPropagation();
-
-              if (!isAdded) {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                  router.push("/login");
-                  return;
-                }
-
-                // 🟦 store in local cart context
-                addToCart({
-                  id: String(product.id),
-                  name: product.name,
-                  price: Number(product.price),
-                  image_url: product.image_url,
-                  description: product.description || "",
-                  stock: 1,
-                });
-
-                // 🟧 store in database cart table
-                await supabase.from("cart").insert({
-                  user_id: user.id,
-                  product_id: product.id,  // 🔥 now this works because you added the column
-                });
-
-                setIsAdded(true);
-              } else {
-                router.push("/cart");
-              }
-            }}
-
+            onClick={handleAddToCart}
             className={`flex items-center gap-2 px-4 py-2 rounded-md transition ${isAdded
-                ? "bg-green-600 hover:bg-green-700 text-white"
-                : "bg-black hover:bg-gray-900 text-white"
-              }`}
+              ? "bg-green-600 hover:bg-green-700 text-white"
+              : "bg-black hover:bg-gray-900 text-white"
+            }`}
           >
             {isAdded ? "Go to Cart" : (
               <>
@@ -170,7 +110,10 @@ export default function ProductCard({ product }: { product: ProductType }) {
 
           {/* WISHLIST */}
           <button
-            onClick={toggleWishlist}
+            onClick={(e) => {
+              e.stopPropagation();
+              setWishlisted(!wishlisted);
+            }}
             className={`p-2 border rounded-md transition ${wishlisted ? "bg-red-100 border-red-300" : "hover:bg-gray-100"
               }`}
           >
@@ -193,7 +136,7 @@ export default function ProductCard({ product }: { product: ProductType }) {
         </div>
       </div>
 
-      {/* FULLSCREEN PREVIEW */}
+      {/* IMAGE PREVIEW */}
       {showPreview && (
         <div
           className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
@@ -203,60 +146,6 @@ export default function ProductCard({ product }: { product: ProductType }) {
             src={image}
             className="max-h-[90vh] max-w-[90vw] object-contain"
           />
-        </div>
-      )}
-
-      {/* ENQUIRY MODAL */}
-      {showEnquiry && (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Product Enquiry</h2>
-
-            <form onSubmit={handleEnquirySubmit} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Your Name"
-                className="border p-2 w-full rounded"
-                value={enquiryData.name}
-                onChange={(e) =>
-                  setEnquiryData({ ...enquiryData, name: e.target.value })
-                }
-              />
-
-              <input
-                type="email"
-                placeholder="Your Email"
-                className="border p-2 w-full rounded"
-                value={enquiryData.email}
-                onChange={(e) =>
-                  setEnquiryData({ ...enquiryData, email: e.target.value })
-                }
-              />
-
-              <textarea
-                placeholder="Message"
-                className="border p-2 w-full rounded"
-                value={enquiryData.message}
-                onChange={(e) =>
-                  setEnquiryData({ ...enquiryData, message: e.target.value })
-                }
-              />
-
-              <button
-                type="submit"
-                className="bg-black text-white px-4 py-2 rounded w-full"
-              >
-                Send Enquiry
-              </button>
-            </form>
-
-            <button
-              className="mt-4 text-gray-600 underline w-full text-center"
-              onClick={() => setShowEnquiry(false)}
-            >
-              Close
-            </button>
-          </div>
         </div>
       )}
     </>
