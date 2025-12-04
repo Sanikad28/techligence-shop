@@ -42,7 +42,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setCart(
         json.items.map((item: any) => ({
           id: item.id,
-          productId: item.productId,
+          productId: item.product_id,
           name: item.product.name,
           price: Number(item.product.price),
           quantity: item.quantity,
@@ -99,7 +99,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user?.id) return;
 
-    await fetch(`/api/cart/clear?userId=${auth.user.id}`, { method: "DELETE" });
+    await fetch("/api/cart", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: auth.user.id }),
+    });
+
     setCart([]);
   };
 

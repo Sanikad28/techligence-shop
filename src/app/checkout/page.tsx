@@ -1,12 +1,19 @@
 "use client";
 
 import { useCart } from "@/context/CartContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function CheckoutPage() {
   const { cart } = useCart();
 
   const [loading, setLoading] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -15,6 +22,17 @@ export default function CheckoutPage() {
     city: "",
     state: "",
   });
+
+  // Get auth token on mount
+  useEffect(() => {
+    const getToken = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setAuthToken(session.access_token);
+      }
+    };
+    getToken();
+  }, []);
 
   const total = cart.reduce((sum, item) => sum + Number(item.price), 0);
 
@@ -30,18 +48,32 @@ export default function CheckoutPage() {
       }
     }
 
+    if (!authToken) {
+      alert("Please sign in to proceed with checkout");
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/checkout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+      },
       body: JSON.stringify({ cart, total, form }),
     });
 
     const data = await res.json();
 
+    if (res.status === 401) {
+      alert("Please sign in to proceed with checkout");
+      setLoading(false);
+      return;
+    }
+
     if (data.url) window.location.href = data.url;
-    else alert("Checkout failed");
+    else alert(`Checkout failed: ${data.error || "Unknown error"}`);
 
     setLoading(false);
   };
@@ -95,7 +127,7 @@ export default function CheckoutPage() {
               <p className="text-gray-600">₹{item.price}</p>
             </div>
             <img
-              src={item.images[0]}
+              src={item.image || "/placeholder.png"}
               className="w-16 h-16 object-contain rounded"
             />
           </div>
