@@ -47,8 +47,47 @@ export async function POST(req: Request) {
     const userId = data.user.id;
     console.log("🛒 [CHECKOUT] User ID:", userId);
 
+    // Get user profile to get email for customer creation
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", userId)
+      .single();
+
+    if (profileError) {
+      console.warn("🛒 [CHECKOUT] Could not fetch user profile:", profileError.message);
+    }
+
+    const userEmail = profile?.email || data.user.email;
+    const userName = profile?.full_name || data.user.user_metadata?.full_name;
+
+    console.log("🛒 [CHECKOUT] Creating/updating Stripe customer...");
+
+    // Create or retrieve Stripe customer
+    let customer;
+    if (userEmail) {
+      const existingCustomers = await stripe.customers.list({
+        email: userEmail,
+        limit: 1,
+      });
+
+      if (existingCustomers.data.length > 0) {
+        customer = existingCustomers.data[0];
+        console.log("🛒 [CHECKOUT] Found existing Stripe customer:", customer.id);
+      } else {
+        customer = await stripe.customers.create({
+          email: userEmail,
+          name: userName,
+          metadata: {
+            userId: userId,
+          },
+        });
+        console.log("🛒 [CHECKOUT] Created new Stripe customer:", customer.id);
+      }
+    }
+
     console.log("🛒 [CHECKOUT] Creating Stripe session...");
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: any = {
       mode: "payment",
       payment_method_types: ["card"],
       line_items: body.cart.map((item: any) => ({
@@ -68,7 +107,14 @@ export async function POST(req: Request) {
         total: body.total,
         shipping: body.form ? JSON.stringify(body.form) : "",
       },
-    });
+    };
+
+    // Add customer if we created/found one
+    if (customer) {
+      sessionConfig.customer = customer.id;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     console.log("✅ [CHECKOUT] Stripe session created successfully");
     console.log("✅ [CHECKOUT] Session ID:", session.id);

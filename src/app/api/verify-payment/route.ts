@@ -19,16 +19,25 @@ export async function GET(req: Request) {
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
+    // Format amount from paise (minor currency) to INR (major currency)
+    const amountRaw = session.amount_total ?? 0;
+    const amountFormatted = (amountRaw / 100).toFixed(2);
+
+    // Prefer customer_details.email if available, fall back to customer_email
+    const email = session.customer_details?.email || session.customer_email || null;
+
     console.log("✅ [VERIFY_PAYMENT] Session retrieved");
     console.log("✅ [VERIFY_PAYMENT] Payment status:", session.payment_status);
-    console.log("✅ [VERIFY_PAYMENT] Amount total:", session.amount_total);
-    console.log("✅ [VERIFY_PAYMENT] Customer email:", session.customer_email);
+    console.log("✅ [VERIFY_PAYMENT] Amount total (paise):", amountRaw);
+    console.log("✅ [VERIFY_PAYMENT] Amount total (INR):", amountFormatted);
+    console.log("✅ [VERIFY_PAYMENT] Customer email:", email);
 
     return NextResponse.json({
       success: true,
       paymentStatus: session.payment_status,
-      amount: session.amount_total,
-      customerEmail: session.customer_email,
+      amount: amountRaw,
+      amountFormatted,
+      customerEmail: email,
       customerId: session.client_reference_id,
       sessionId: session.id,
     });

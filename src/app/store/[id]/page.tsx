@@ -33,14 +33,7 @@ export default function ProductDetails({ params }: { params: Promise<{ id: strin
   }
 
   const handleAdd = () => {
-    addToCart({
-      id: String(product.id),
-      name: product.name,
-      price: product.price,
-      image_url: product.image_url,
-      description: product.description,
-      stock: product.stock,
-    });
+    addToCart(String(product.id));
     setIsAdded(true);
   };
 

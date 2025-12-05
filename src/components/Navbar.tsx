@@ -17,6 +17,7 @@ export default function Navbar() {
   const { cartCount } = useCart();
 
   const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -25,11 +26,41 @@ export default function Navbar() {
     async function fetchUser() {
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
+
+      // fetch profile role for navbar admin link
+      try {
+        if (data.user?.id) {
+          const { data: profile, error } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", data.user.id)
+            .single();
+
+          if (!error && profile) setRole(profile.role ?? null);
+          else setRole(null);
+        } else {
+          setRole(null);
+        }
+      } catch (err) {
+        setRole(null);
+      }
     }
     fetchUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user?.id) {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        if (!error && profile) setRole(profile.role ?? null);
+        else setRole(null);
+      } else {
+        setRole(null);
+      }
     });
 
     return () => {
@@ -54,6 +85,9 @@ export default function Navbar() {
     { label: "Disclaimer", href: "/disclaimer" },
     { label: "Uni", href: "/uni" },
   ];
+
+  // show dashboard for admins
+  const showDashboard = !!user && role === "admin";
 
   return (
     <header
@@ -181,6 +215,21 @@ export default function Navbar() {
             </Link>
           );
         })}
+
+        {showDashboard && (
+          <Link href="/admin/products">
+            <span
+              className={`relative cursor-pointer group ${pathname === "/admin/products" ? "font-semibold" : ""}`}
+            >
+              Dashboard
+              <span
+                className={`absolute left-0 -bottom-[3px] h-[2px] transition-all duration-300 ${
+                  pathname === "/admin/products" ? "w-full bg-current" : "w-0 group-hover:w-full bg-current"
+                }`}
+              />
+            </span>
+          </Link>
+        )}
       </nav>
     </header>
   );

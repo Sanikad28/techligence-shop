@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { createClient } from "@supabase/supabase-js";
@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function SuccessPage() {
+function SuccessPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
   const { cart, clearCart } = useCart();
@@ -136,5 +136,18 @@ export default function SuccessPage() {
         Continue Shopping
       </a>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="pt-32 text-center">
+        <h1 className="text-2xl font-bold">Loading...</h1>
+        <p className="mt-2 text-gray-600">Please wait.</p>
+      </div>
+    }>
+      <SuccessPageContent />
+    </Suspense>
   );
 }

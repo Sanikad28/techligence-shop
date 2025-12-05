@@ -4,9 +4,9 @@ import supabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function GET(
   _req: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
 
   if (!id) {
     return NextResponse.json({ data: null, error: "Missing product ID" }, { status: 400 });
